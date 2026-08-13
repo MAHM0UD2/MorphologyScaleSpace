@@ -1,1 +1,1 @@
-# MorphologyScaleSpace
+# Morphology Scale Space
