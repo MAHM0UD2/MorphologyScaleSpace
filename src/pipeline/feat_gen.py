@@ -1,9 +1,7 @@
-from utils.utils import decimate, compute_a_t, expand, compute_residual_t
+from src.utils.utils import decimate, compute_a_t, expand, compute_residual_t
 import pandas as pd
-from state import state
-from utils.image import Image
-from PIL import Image as PILImage
-import numpy as np
+from src.state import state
+from src.utils.image import Image
 
 def feature_generator(image: Image):
 
@@ -42,20 +40,3 @@ def feature_generator(image: Image):
 
     zeros_count = len(state.F_1[state.F_1["v"] == 0])
     state.L = (zeros_count - 1) + (sigma_A_t - 1) - 1
-
-
-def load_and_generate(file_path):
-    # 1. Load the native 8-bit grayscale BMP
-    raw_img = PILImage.open(file_path)
-
-    # 2. Extract and cast strictly to signed integers
-    # This strictly prevents underflow during negative residual calculation
-    pixel_matrix = np.array(raw_img, dtype=int)
-
-    # 3. Wrap the matrix in Image class
-    u_0 = Image(pixel_matrix)
-
-    # 4. Execute G(f)
-    feature_generator(u_0)
-
-    return u_0.height, u_0.width

@@ -1,6 +1,12 @@
 from pathlib import Path
 from src.state import state
-from src.feat_gen import load_and_generate
+from PIL import Image as PILImage
+import numpy as np
+from src.utils.image import Image
+from src.pipeline.feat_gen import feature_generator
+from src.pipeline.step_func import compression
+from src.pipeline.reconstruction import reconstruct
+
 
 def process_image_folder(input_folder):
     directory = Path(input_folder)
@@ -9,12 +15,30 @@ def process_image_folder(input_folder):
     for file_path in directory.glob("*.bmp"):
         print(f"--- Starting Decomposition for: {file_path.name} ---")
 
-        # 1. Delete previous image data
+        # Delete previous image data
         state.reset()
 
-        # 2. Execute G(f)
-        original_h, original_w = load_and_generate(str(file_path))
+        raw_img = PILImage.open(str(file_path))
+        pixel_matrix = np.array(raw_img, dtype=int)
+        f = Image(pixel_matrix)
 
+        # 1. Execute G(f)
+        feature_generator(f)
+
+        # 2. Step function
+        # Todo
+
+        # 3. Reconstruction
+        reconstructed_u = reconstruct()
+
+        # Saving output
+        path = Path(state.output_folder) / f"{file_path.name}"
+        reconstructed_u.save_bmp(path)
+
+        diff_image = f.absolute_log_difference(reconstructed_u)
+        diff_image.save_bmp(Path(state.output_folder) / f"Diff {file_path.name}")
+
+        print(f"--- Ending Pipeline for: {file_path.name} ---")
 
 if __name__ == "__main__":
     process_image_folder(state.input_folder)

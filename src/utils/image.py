@@ -1,4 +1,5 @@
 import numpy as np
+from PIL import Image as PILImage
 
 class Image:
     def __init__(self, data):
@@ -28,3 +29,35 @@ class Image:
     def as_array(self):
         # Helper to return the raw matrix when you need to do full-image math
         return self._data
+
+    def __sub__(self, other: Image):
+        arr_self = self.as_array()
+        arr_other = other.as_array()
+
+        return Image(arr_self - arr_other)
+
+    def __add__(self, other: Image):
+        arr_self = self.as_array()
+        arr_other = other.as_array()
+
+        return Image(arr_self + arr_other)
+
+    def save_bmp(self, filepath):
+        raw_array = self.as_array()
+        visual_array = np.clip(raw_array, 0, 255).astype(np.uint8)
+        PILImage.fromarray(visual_array).save(filepath)
+
+    def absolute_log_difference(self, other: Image) -> Image:
+        # old = |self - other|
+        # new_value = c * ln(1+old)
+        arr_self = self.as_array()
+        arr_other = other.as_array()
+
+        abs_error = np.abs(arr_self - arr_other)
+
+        c = 255 / np.log1p(255)
+        log_error = c * np.log1p(abs_error)
+
+        discrete_log_error = np.round(log_error)
+
+        return Image(discrete_log_error)

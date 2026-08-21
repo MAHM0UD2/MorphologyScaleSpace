@@ -1,6 +1,6 @@
 import numpy as np
 import statistics
-from image import Image
+from src.utils.image import Image
 import pandas as pd
 from src.state import state
 
@@ -84,16 +84,13 @@ def decimate(u_t: Image) -> Image:
     return u_t_plus_one
 
 def compute_residual_t(u_t: Image, est_u_t: Image, t: int):
-    # 1. Dimension Alignment: Crop est_u_t to match u_t strictly
-    est_u_t_cropped = est_u_t.as_array()[:u_t.height, :u_t.width]
-
-    # 2. Vectorized Subtraction
-    r_t_array = u_t.as_array() - est_u_t_cropped
+    # 1. Image Subtraction
+    r_t_array = u_t - est_u_t
 
     # Temporary list to hold the new tuples for this level
     new_tuples = []
 
-    # 3. Iteration and Non-Expansive Filtering
+    # 2. Iteration and Non-Expansive Filtering
     for i in range(u_t.height):
         for j in range(u_t.width):
             # Skip the sub-sampled base pixels
@@ -103,12 +100,88 @@ def compute_residual_t(u_t: Image, est_u_t: Image, t: int):
 
                 new_tuples.append({"p": p, "v": v, "t": t})
 
-    # 4. Batch Update the Feature Set
+    # 3. Batch Update the Feature Set
     if new_tuples:
         new_df = pd.DataFrame(new_tuples)
         # Using concat updates the global DataFrame reference
         state.F_1 = pd.concat([state.F_1, new_df], ignore_index=True)
 
-def compute_a_t(t:int):
+def generate_r_t(t: int, width_t: int, height_t: int) -> Image:
+    r_t_array = np.zeros((height_t, width_t), dtype=int)
+    f_t = state.F_1.loc[state.F_1['t'] == t]
+
+    for p, v in zip(f_t["p"], f_t["v"]):
+        i, j = p
+        r_t_array[i, j] = v
+
+    return Image(r_t_array)
+
+def compute_a_t(t: int):
     a_t = state.F_1[state.F_1['t'] == t]['v'].unique()
     state.V_1[t] = a_t
+
+def uncommitted_uniform_quantization(a_t: list[int], t: int):
+    min_diff = float('inf')
+    merge_idx = 0
+
+    for i in range(len(a_t) - 1):
+        diff = a_t[i + 1] - a_t[i]
+        if diff < min_diff:
+            min_diff = diff
+            merge_idx = i
+
+    q1 = a_t[merge_idx]
+    q2 = a_t[merge_idx + 1]
+    s = q1 + q2
+    # sgn(s) * ((|s| + 1) / 2)
+    q_new = int(np.sign(s) * ((abs(s) + 1) // 2))
+
+    mask_1 = (state.F_1["t"] == t) & (state.F_1["v"] == q1)
+    mask_2 = (state.F_1["t"] == t) & (state.F_1["v"] == q2)
+
+    state.F_1.loc[mask_1 | mask_2, "v"] = q_new
+
+    state.V_1["t"] =state. F_1.loc[state.F_1["t"] == t, "v"].unique()
+
+
+def committed_ward_clustering(a_t: list[int], t: int):
+    best_q1, best_q2, best_q_new = None, None, None
+    min_mse_increase = float('inf')
+
+    for i in range(len(a_t) - 1):
+        q1 = a_t[i]
+        q2 = a_t[i + 1]
+
+        count_q1 = len(state.F_1[(state.F_1["t"] == t) & (state.F_1["v"] == q1)])
+        count_q2 = len(state.F_1[(state.F_1["t"] == t) & (state.F_1["v"] == q2)])
+        q_new = q1 if count_q1 >= count_q2 else q2
+
+        mse_increase = count_q1 * ((q1 - q_new) ** 2) + count_q2 * ((q2 - q_new) ** 2)
+
+        if mse_increase < min_mse_increase:
+            min_mse_increase = mse_increase
+            best_q1 = q1
+            best_q2 = q2
+            best_q_new = q_new
+
+    mask1 = (state.F_1["t"] == t) & (state.F_1["v"] == best_q1)
+    mask2 = (state.F_1["t"] == t) & (state.F_1["v"] == best_q2)
+
+    state.F_1.loc[mask1 | mask2, "v"] = best_q_new
+
+    state.V_1[t] = state.F_1.loc[state.F_1["t"] == t, "v"].unique()
+
+
+def generate_u_last() -> Image:
+    f_last = state.F_1.loc[state.F_1['t'] == state.last, ['p', 'v']]
+
+    max_i = max(p[0] for p in f_last['p'])
+    max_j = max(p[1] for p in f_last['p'])
+
+    u_last_array = np.zeros((max_i + 1, max_j + 1), dtype=int)
+
+    for p, v in zip(f_last["p"], f_last["v"]):
+        i, j = p
+        u_last_array[i, j] = v
+
+    return Image(u_last_array)

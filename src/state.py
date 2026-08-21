@@ -9,10 +9,11 @@ class GlobalState:
     last: int = 1
     ell: int = 0
     input_folder: str = r"G:\MorphologyScaleSpace\images"
+    output_folder: str = r"G:\MorphologyScaleSpace\results"
 
     def reset(self):
-        self.F_1 = field(default_factory=lambda: pd.DataFrame(columns=["p","v","t"]))
-        self.V_1 = field(default_factory=dict)
+        self.F_1 = pd.DataFrame(columns=["p","v","t"])
+        self.V_1 = {}
         self.L = 0
         self.last = 1
         self.ell = 0
