@@ -25,8 +25,18 @@ def process_image_folder(input_folder):
         # 1. Execute G(f)
         feature_generator(f)
 
+        t_arr = state.F_1["t"].values.astype(int)
+        v_arr = state.F_1["v"].values.astype(int)
+        active_mask = np.ones(len(state.F_1), dtype=bool)
+
         # 2. Step function
         # Todo
+        # Todo: Remove this as soon as you find a better approach
+        for i in range(100):
+            compression(t_arr, v_arr, active_mask)
+
+        state.F_1["v"] = v_arr
+        state.F_1 = state.F_1[active_mask].reset_index(drop=True)
 
         # 3. Reconstruction
         reconstructed_u = reconstruct()
@@ -37,6 +47,8 @@ def process_image_folder(input_folder):
 
         diff_image = f.absolute_log_difference(reconstructed_u)
         diff_image.save_bmp(Path(state.output_folder) / f"Diff {file_path.name}")
+
+        print(f"    Compressed: {state.ell / state.L}%")
 
         print(f"--- Ending Pipeline for: {file_path.name} ---")
 

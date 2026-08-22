@@ -120,7 +120,7 @@ def compute_a_t(t: int):
     a_t = state.F_1[state.F_1['t'] == t]['v'].unique()
     state.V_1[t] = a_t
 
-def uncommitted_uniform_quantization(a_t: list[int], t: int):
+def uncommitted_uniform_quantization(a_t: list[int], t: int, t_arr: np.ndarray, v_arr: np.ndarray, active_mask: np.ndarray):
     min_diff = float('inf')
     merge_idx = 0
 
@@ -133,18 +133,17 @@ def uncommitted_uniform_quantization(a_t: list[int], t: int):
     q1 = a_t[merge_idx]
     q2 = a_t[merge_idx + 1]
     s = q1 + q2
-    # sgn(s) * ((|s| + 1) / 2)
+    # sgn(s) * ((|s| + 1) / 2): Go to nearest integer
     q_new = int(np.sign(s) * ((abs(s) + 1) // 2))
 
-    mask_1 = (state.F_1["t"] == t) & (state.F_1["v"] == q1)
-    mask_2 = (state.F_1["t"] == t) & (state.F_1["v"] == q2)
+    mask_1 = (t_arr == t) & (v_arr == q1) & active_mask
+    mask_2 = (t_arr == t) & (v_arr == q2) & active_mask
 
-    state.F_1.loc[mask_1 | mask_2, "v"] = q_new
-
-    state.V_1["t"] =state. F_1.loc[state.F_1["t"] == t, "v"].unique()
+    v_arr[mask_1 | mask_2] = q_new
 
 
-def committed_ward_clustering(a_t: list[int], t: int):
+
+def committed_ward_clustering(a_t: list[int], t: int, t_arr: np.ndarray, v_arr: np.ndarray, active_mask: np.ndarray):
     best_q1, best_q2, best_q_new = None, None, None
     min_mse_increase = float('inf')
 
@@ -152,8 +151,11 @@ def committed_ward_clustering(a_t: list[int], t: int):
         q1 = a_t[i]
         q2 = a_t[i + 1]
 
-        count_q1 = len(state.F_1[(state.F_1["t"] == t) & (state.F_1["v"] == q1)])
-        count_q2 = len(state.F_1[(state.F_1["t"] == t) & (state.F_1["v"] == q2)])
+        mask_1 = (t_arr == t) & (v_arr == q1) & active_mask
+        mask_2 = (t_arr == t) & (v_arr == q2) & active_mask
+
+        count_q1 = np.sum(mask_1)
+        count_q2 = np.sum(mask_2)
         q_new = q1 if count_q1 >= count_q2 else q2
 
         mse_increase = count_q1 * ((q1 - q_new) ** 2) + count_q2 * ((q2 - q_new) ** 2)
@@ -164,12 +166,10 @@ def committed_ward_clustering(a_t: list[int], t: int):
             best_q2 = q2
             best_q_new = q_new
 
-    mask1 = (state.F_1["t"] == t) & (state.F_1["v"] == best_q1)
-    mask2 = (state.F_1["t"] == t) & (state.F_1["v"] == best_q2)
+    mask1 = (t_arr == t) & (v_arr == best_q1) & active_mask
+    mask2 = (t_arr == t) & (v_arr == best_q2) & active_mask
 
-    state.F_1.loc[mask1 | mask2, "v"] = best_q_new
-
-    state.V_1[t] = state.F_1.loc[state.F_1["t"] == t, "v"].unique()
+    v_arr[mask1 | mask2] = best_q_new
 
 
 def generate_u_last() -> Image:
